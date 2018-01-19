@@ -1,21 +1,4 @@
-library(moments)
-library(corrgram)
-library(pear)
-require(zoo)
-entrada = data.frame(read.csv(choose.files(), sep=";", dec=","))
-qtd_ano = length(entrada[,1])/12
 ##############ENTRADA E INSTRUÇÕES REFERENTES AS INFORMAÇÕES BRUTAS################
-#Entrada de dados bruta com informações mensais coletadas ao longo dos anos. 
-#Este arquivo deve estar num formato específico (.csv) em que as colunas são separadas 
-#por ";" e os decimais por ",". Neste arquivo devem haver apenas 2 colunas,
-#a primeira referente ao mês, que deve possuir cabeçalho nomeado "MES" e a segunda
-#referente a vazão mensal nomeada "VAZAO" correspondente ao mês da mesma linha.
-#A coluna "MES" deve obedecer algumas regras para que os dados sejam lidos corretamente:
-#-Os dados devem estar em ordem cronológica
-#-Todos os anos devem estar completos em questão de meses
-#-Os últimos 4 caracteres da informação devem se referir ao ano em questão
-#Da coluna "VAZAO" só é necessário que os valores estejam separando decimais por ","
-
 
 #Exemplo correto:
 #
@@ -35,9 +18,21 @@ qtd_ano = length(entrada[,1])/12
 
 
 
+library(moments)
+library(corrgram)
+library(pear)
+
+#LEITURA DE ARQUIVOS DE ENTRADA E VARIÁVEIS ÚTEIS#
+
+entrada = data.frame(read.csv(choose.files(), sep=";", dec=",")) #Leitura de dados históricos mensais
+serie_sintetica = data.frame(read.csv(choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma bacia
+qtd_ano = length(entrada[,1])/12 #Quantidade de anos nos dados históricos baseado no arquivo de entrada
 
 
-div_anos<-function(sH) #Esta função pega os dados brutos e retorna uma tabela ano x mes
+##################FUNÇÕES####################
+
+#Esta função pega os dados brutos e retorna uma tabela ano x mes, além disso plota 2 gráficos necessários na análise
+div_anos<-function(sH)
 {
   qtd_ano = length(sH[,1])/12 #Calcula, baseado no número de linhas a quantidade de anos registrados no arquivo
   serie_hist = matrix(sH$VAZAO, qtd_ano,byrow = TRUE)#Quebra o dataframe em 38 partes(anos) e cada parte é convertida numa linha da nova tabela
@@ -58,8 +53,7 @@ div_anos<-function(sH) #Esta função pega os dados brutos e retorna uma tabela an
   return(serie_hist)
 }
 
-tabela_refinada = div_anos(entrada) #Função "quebra" o vetor de entrada de todos os meses em um dataframe cujas colunas se referem aos meses e as linhas aos anos
-
+#Pega os dados de entrada de vazão mensal e gera um relatório de estatísticas com as médias mensais, desvio padrão, assimetria e coeficiente de kurtosis
 relatorio_estatistico<-function(tabela_anual)
 {
   Medias = apply(tabela_anual,2,mean)
@@ -67,12 +61,44 @@ relatorio_estatistico<-function(tabela_anual)
   Assimetria = skewness(tabela_anual)
   Indice_Kurt = kurtosis(tabela_anual)
   
-  Relatorio = data.frame(Medias,Desvio_Padrao,Assimetria,Indice_Kurt) #Relatório com propriedades importantes como Média, Desvio Padrão, Assimetria e Indice Kurotsis 
+  Relatorio = data.frame(Medias,Desvio_Padrao,Assimetria,Indice_Kurt) 
   return(Relatorio)  
 }
 
+#Desagrega os dados sintéticos utilizando estatísticas e dados históricos
+desagrega<-function(serieSint,serieDadosHist)
+{
+  delta_i=serieSint$V1-serieDadosHist$V1
+  K=sqrt(length(delta_i))
+  W_i=1
+  return(K)
+}
+
+
+
+
+
+
+
+
+
+
+
+#######################APLICAÇÕES###########################
+
+#Aplicação da primeira função(div_anos)
+tabela_refinada = div_anos(entrada) #Função "quebra" o vetor de entrada de todos os meses em um dataframe cujas colunas se referem aos meses e as linhas aos anos
+
+#Aplicação da segunda função(relatorio_estatistico)
 Relatorio = relatorio_estatistico(tabela_refinada)
 
+#Aplicação da terceira função(desagrega)
+Anual_Hist=data.frame(V1=apply(tabela_refinada,1,sum))#Vazões anuais dos dados históricos
+
+Deltai=desagrega(serie_sintetica,Anual_Hist)
+Deltai
+
+#Aplicações diversas que gram gráficos, posteriormente provavelmente serão colocadas em outras funções
 Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano,12),deltat = 1/12,class="ts") 
 CorrelacaoSazonal= peacf(Time_serie,5)
 CorrelacaoSazonal
