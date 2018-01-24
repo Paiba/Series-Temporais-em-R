@@ -69,9 +69,19 @@ relatorio_estatistico<-function(tabela_anual)
 desagrega<-function(serieSint,serieDadosHist)
 {
   delta_i=serieSint$V1-serieDadosHist$V1
+  delta_i=sort(delta_i)
   K=sqrt(length(delta_i))
-  W_i=1
-  return(K)
+  div=0
+  for(i in 1:K)
+  {
+    div=div+(1/i)
+  }
+  cwm=rep(0,K)
+  for(i in 1:K)
+  {
+    cwm[i]=(1/i)/div
+  }
+  return(cwm)
 }
 
 
