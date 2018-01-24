@@ -66,22 +66,47 @@ relatorio_estatistico<-function(tabela_anual)
 }
 
 #Desagrega os dados sintéticos utilizando estatísticas e dados históricos
-desagrega<-function(serieSint,serieDadosHist)
+soma_harm<-function(a) #Função auxiliar para a função 'desagrega' dado um inteiro 'a' faz a soma 'div' = [1 + (1/2) + (1/3) + ... + (1/a)]
 {
-  delta_i=serieSint$V1-serieDadosHist$V1
-  delta_i=sort(delta_i)
-  K=sqrt(length(delta_i))
   div=0
-  for(i in 1:K)
+  for(i in 1:a)
   {
     div=div+(1/i)
   }
+  return(div)
+}
+
+desagrega<-function(serieSint,serieDadosHist)
+{
+  
+  Anuais = data.frame(V1=apply(serieDadosHist,1,sum))#Dados as vazões mensais, calcula as vazões anuais
+  
+  delta_i=abs(rep(serieSint$V1[1],length(Anuais))-Anuais)#Faz um vetor da diferença(delta_i) do primeiro dado sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
+  
+  Tabela = cbind(Anuais,delta_i$V1)#Faz uma tabela que relaciona ano, vazão anual histórica e diferença(delta_i)
+  Tabela = Tabela[order(Tabela$delta_i),]#Ordena de forma crescente de delta_i
+  
+  K = floor(sqrt(length(delta_i$V1)))
+  
+  div=soma_harm(K)
+  
   cwm=rep(0,K)
   for(i in 1:K)
   {
-    cwm[i]=(1/i)/div
+    if(i==1){
+      cwm[i]=(1/div)
+    }
+    else
+      cwm[i]=cwm[i-1]+(1/i)/div
   }
-  return(cwm)
+  
+  a=sample(cwm,1)
+  b=match(a,cwm)
+  
+  print(cwm)
+  print(a)
+  print(b)
+  return(Tabela)
 }
 
 
@@ -103,21 +128,22 @@ tabela_refinada = div_anos(entrada) #Função "quebra" o vetor de entrada de todos
 Relatorio = relatorio_estatistico(tabela_refinada)
 
 #Aplicação da terceira função(desagrega)
-Anual_Hist=data.frame(V1=apply(tabela_refinada,1,sum))#Vazões anuais dos dados históricos
 
-Deltai=desagrega(serie_sintetica,Anual_Hist)
-Deltai
+Deltai=desagrega(serie_sintetica,tabela_refinada)
 
 #Aplicações diversas que gram gráficos, posteriormente provavelmente serão colocadas em outras funções
-Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano,12),deltat = 1/12,class="ts") 
-CorrelacaoSazonal= peacf(Time_serie,5)
-CorrelacaoSazonal
-CorrelacaoSazonalParcial= pepacf(Time_serie,5)
-CorrelacaoSazonalParcial
+###########################################
+#Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano,12),deltat = 1/12,class="ts") 
 
-ACF_N = acf(Time_serie)
-ACF_N
-ACF_Parcial=pacf(Time_serie)
-ACF_Parcial
+#CorrelacaoSazonal= peacf(Time_serie,5)
+#CorrelacaoSazonal
+#CorrelacaoSazonalParcial= pepacf(Time_serie,5)
+#CorrelacaoSazonalParcial
+
+#ACF_N = acf(Time_serie)
+#ACF_N
+#ACF_Parcial=pacf(Time_serie)
+#ACF_Parcial
  
-plot(entrada, type="b")
+#plot(entrada, type="b")
+###################################################
