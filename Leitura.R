@@ -65,7 +65,7 @@ relatorio_estatistico<-function(tabela_anual)
   return(Relatorio)  
 }
 
-#Desagrega os dados sintéticos utilizando estatísticas e dados históricos
+#############Desagrega de forma não paramétrica os dados sintéticos utilizando estatísticas e dados históricos
 soma_harm<-function(a) #Função auxiliar para a função 'desagrega' dado um inteiro 'a' faz a soma 'div' = [1 + (1/2) + (1/3) + ... + (1/a)]
 {
   div=0
@@ -76,16 +76,21 @@ soma_harm<-function(a) #Função auxiliar para a função 'desagrega' dado um inteir
   return(div)
 }
 
-desagrega<-function(serieSint,serieDadosHist)
+desagrega_np<-function(serieSint,serieDadosHist)
 {
+  desagregado_final = data.frame()#Cria um data frame vazio que será nossa série anual 
+  
+  ##################PRIMEIRA ITERAÇÃO DE DESAGREGAÇÃO##########################
   
   Anuais = data.frame(V1=apply(serieDadosHist,1,sum))#Dados as vazões mensais, calcula as vazões anuais
   
-  delta_i=abs(rep(serieSint$V1[1],length(Anuais))-Anuais)#Faz um vetor da diferença(delta_i) do primeiro dado sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
+  delta_i = abs(rep(serieSint$V1[1],length(Anuais))-Anuais)#Faz um vetor da diferença(delta_i) do primeiro dado sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
   
+  x=delta_i$V1
   Tabela = cbind(Anuais,delta_i$V1)#Faz uma tabela que relaciona ano, vazão anual histórica e diferença(delta_i)
   Tabela = Tabela[order(Tabela$delta_i),]#Ordena de forma crescente de delta_i
   
+  ############CÁLCULO DE K E DO CWM####################
   K = floor(sqrt(length(delta_i$V1)))
   
   div=soma_harm(K)
@@ -99,16 +104,61 @@ desagrega<-function(serieSint,serieDadosHist)
     else
       cwm[i]=cwm[i-1]+(1/i)/div
   }
+  ################
   
-  a=sample(cwm,1)
-  b=match(a,cwm)
   
-  print(cwm)
-  print(a)
-  print(b)
-  return(Tabela)
+  random = sample(cwm,1) #Escolhe número aleatório no vetor de pesos cumulativos(cwm) e armazena na variavel 'random'
+  
+  posicao = match(random,cwm) #Armazena na variavel 'posicao' a posição do número escolhido no vetor cwm
+  
+  candidato = rownames(Tabela)[posicao] #Armazena o ano candidato a desagrgação na variavel 'candidato'
+  
+  
+  desagregado = serieDadosHist[candidato,]*(serieSint$V1[1]/(apply(serieDadosHist[candidato,],1,sum)))
+  desagregado = c(desagregado[1,],TOTAL=sum(desagregado[1,]))
+  
+  desagregado_final = rbind(desagregado_final,desagregado)
+  
+  ############FIM DA DESAGREGAÇÃO DO ANO 1##############
+  Tabela = Tabela[order(row.names(Tabela)),]
+  ############DESAGREGAÇÃO DOS OUTROS ANOS###########################
+  for (j in 2:qtd_ano)
+  {
+    ########### CÁLCULO DO DELTA_i###########
+    fi_1 = 1
+    fi_2 = 1
+    
+    for(i in 1:49)
+    {
+      delta_i[i,1] = sqrt(fi_1*(serieSint$V1[j]-Anuais[i,1])^2 + fi_2*(desagregado$DEZ[1]-1)^2)
+    }
+    Tabela[,2]=delta_i
+    Tabela = Tabela[order(Tabela$delta_i),]
+    
+    random = sample(cwm,1)
+    posicao = match(random,cwm)
+    candidato = rownames(Tabela)[posicao]
+    
+    desagregado = serieDadosHist[candidato,]*(serieSint$V1[j]/(apply(serieDadosHist[candidato,],1,sum)))
+    desagregado = c(desagregado[1,],TOTAL=sum(desagregado[1,]))
+    
+    desagregado_final = rbind(desagregado_final,desagregado)
+    
+    
+  }
+  
+  return(desagregado_final)
 }
 
+############Desagrega multiplas vezes (k vezes)################
+
+desagrega_mult<-function(serieSint,serieDadosHist,k){
+  lista<-list()
+  for (i in 1:k){
+    lista[[i]]=desagrega_np(serieSint,serieDadosHist)
+  }
+  return(lista)
+}
 
 
 
@@ -129,7 +179,7 @@ Relatorio = relatorio_estatistico(tabela_refinada)
 
 #Aplicação da terceira função(desagrega)
 
-Deltai=desagrega(serie_sintetica,tabela_refinada)
+Desagregado=desagrega_mult(serie_sintetica,tabela_refinada,1)
 
 #Aplicações diversas que gram gráficos, posteriormente provavelmente serão colocadas em outras funções
 ###########################################
