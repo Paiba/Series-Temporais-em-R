@@ -21,11 +21,11 @@
 library(moments)
 library(corrgram)
 library(pear)
-
+require(tcltk)
 #LEITURA DE ARQUIVOS DE ENTRADA E VARIÁVEIS ÚTEIS#
 
-entrada = data.frame(read.csv(choose.files(), sep=";", dec=",")) #Leitura de dados históricos mensais
-serie_sintetica = data.frame(read.csv(choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma bacia
+entrada = data.frame(read.csv(tk_choose.files(), sep=";", dec=",")) #Leitura de dados históricos mensais
+serie_sintetica = data.frame(read.csv(tk_choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma bacia
 qtd_ano = length(entrada[,1])/12 #Quantidade de anos nos dados históricos baseado no arquivo de entrada
 
 
@@ -66,15 +66,6 @@ relatorio_estatistico<-function(tabela_anual)
 }
 
 #############Desagrega de forma não paramétrica os dados sintéticos utilizando estatísticas e dados históricos
-soma_harm<-function(a) #Função auxiliar para a função 'desagrega' dado um inteiro 'a' faz a soma 'div' = [1 + (1/2) + (1/3) + ... + (1/a)]
-{
-  div=0
-  for(i in 1:a)
-  {
-    div=div+(1/i)
-  }
-  return(div)
-}
 
 desagrega_np<-function(serieSint,serieDadosHist)
 {
@@ -93,7 +84,7 @@ desagrega_np<-function(serieSint,serieDadosHist)
   ############CÁLCULO DE K E DO CWM####################
   K = floor(sqrt(length(delta_i$V1)))
   
-  div=soma_harm(K)
+  div=sum(1/1:K)
   
   cwm=rep(0,K)
   for(i in 1:K)
@@ -127,10 +118,11 @@ desagrega_np<-function(serieSint,serieDadosHist)
     ########### CÁLCULO DO DELTA_i###########
     fi_1 = 1
     fi_2 = 1
+    dezembrohistorico=1
     
     for(i in 1:49)
     {
-      delta_i[i,1] = sqrt(fi_1*(serieSint$V1[j]-Anuais[i,1])^2 + fi_2*(desagregado$DEZ[1]-1)^2)
+      delta_i[i,1] = sqrt(fi_1*(serieSint$V1[j]-Anuais[i,1])^2 + fi_2*(desagregado$DEZ[i-1]-dezembrohistorico)^2)
     }
     Tabela[,2]=delta_i
     Tabela = Tabela[order(Tabela$delta_i),]
