@@ -26,7 +26,9 @@ require(tcltk)
 
 entrada = data.frame(read.csv(tk_choose.files(), sep=";", dec=",")) #Leitura de dados históricos mensais
 serie_sintetica = data.frame(read.csv(tk_choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma bacia
-qtd_ano = length(entrada[,1])/12 #Quantidade de anos nos dados históricos baseado no arquivo de entrada
+qtd_ano_hist = length(entrada[,1])/12 #Quantidade de anos nos dados históricos baseado no arquivo de entrada
+qtd_ano_des = length(serie_sintetica[,1])
+
 
 
 ##################FUNÇÕES####################
@@ -34,8 +36,8 @@ qtd_ano = length(entrada[,1])/12 #Quantidade de anos nos dados históricos basead
 #Esta função pega os dados brutos e retorna uma tabela ano x mes, além disso plota 2 gráficos necessários na análise
 div_anos<-function(sH)
 {
-  qtd_ano = length(sH[,1])/12 #Calcula, baseado no número de linhas a quantidade de anos registrados no arquivo
-  serie_hist = matrix(sH$VAZAO, qtd_ano,byrow = TRUE)#Quebra o dataframe em 38 partes(anos) e cada parte é convertida numa linha da nova tabela
+  qtd_ano_hist = length(sH[,1])/12 #Calcula, baseado no número de linhas a quantidade de anos registrados no arquivo
+  serie_hist = matrix(sH$VAZAO, qtd_ano_hist,byrow = TRUE)#Quebra o dataframe em 38 partes(anos) e cada parte é convertida numa linha da nova tabela
   
   anos = as.character(sH$MES)
   anos = substr(anos, nchar(anos)-4+1, nchar(anos))
@@ -74,7 +76,6 @@ desagrega_np<-function(serieSint,serieDadosHist)
   ##################PRIMEIRA ITERAÇÃO DE DESAGREGAÇÃO##########################
   
   Anuais = data.frame(V1=apply(serieDadosHist,1,sum))#Dados as vazões mensais, calcula as vazões anuais
-  
   delta_i = abs(rep(serieSint$V1[1],length(Anuais))-Anuais)#Faz um vetor da diferença(delta_i) do primeiro dado sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
   
   x=delta_i$V1
@@ -98,37 +99,37 @@ desagrega_np<-function(serieSint,serieDadosHist)
   ################
   
   
-  random = sample(cwm,1) #Escolhe número aleatório no vetor de pesos cumulativos(cwm) e armazena na variavel 'random'
-  
-  posicao = match(random,cwm) #Armazena na variavel 'posicao' a posição do número escolhido no vetor cwm
-  
+  random = runif(1) #Escolhe número aleatório no vetor de pesos cumulativos(cwm) e armazena na variavel 'random'
+  posicao = which.min(abs(cwm - random)) #Armazena na variavel 'posicao' a posição do número escolhido no vetor cwm
   candidato = rownames(Tabela)[posicao] #Armazena o ano candidato a desagrgação na variavel 'candidato'
-  
+ 
   
   desagregado = serieDadosHist[candidato,]*(serieSint$V1[1]/(apply(serieDadosHist[candidato,],1,sum)))
   desagregado = c(desagregado[1,],TOTAL=sum(desagregado[1,]))
   
   desagregado_final = rbind(desagregado_final,desagregado)
-  
+
   ############FIM DA DESAGREGAÇÃO DO ANO 1##############
   Tabela = Tabela[order(row.names(Tabela)),]
   ############DESAGREGAÇÃO DOS OUTROS ANOS###########################
-  for (j in 2:qtd_ano)
+  for (j in 2:qtd_ano_des)
   {
     ########### CÁLCULO DO DELTA_i###########
-    fi_1 = 1
-    fi_2 = 1
-    dezembrohistorico=1
     
-    for(i in 1:49)
+    fi_1 = 1/var(Anuais[2:qtd_ano_hist,1])
+    fi_2 = 1/var(serieDadosHist$DEZ[2:qtd_ano_hist])
+    
+    for(i in 2:qtd_ano_hist)
     {
-      delta_i[i,1] = sqrt(fi_1*(serieSint$V1[j]-Anuais[i,1])^2 + fi_2*(desagregado$DEZ[i-1]-dezembrohistorico)^2)
+      delta_i[i,1] = sqrt(fi_1*(serieSint$V1[j]-Anuais[i,1])^2 + fi_2*(desagregado_final$DEZ[j-1]-serieDadosHist$DEZ[i-1])^2)
     }
-    Tabela[,2]=delta_i
+   
+    Tabela[,2] = delta_i
+
     Tabela = Tabela[order(Tabela$delta_i),]
     
-    random = sample(cwm,1)
-    posicao = match(random,cwm)
+    random = runif(1)
+    posicao = which.min(abs(cwm - random))
     candidato = rownames(Tabela)[posicao]
     
     desagregado = serieDadosHist[candidato,]*(serieSint$V1[j]/(apply(serieDadosHist[candidato,],1,sum)))
@@ -146,8 +147,11 @@ desagrega_np<-function(serieSint,serieDadosHist)
 
 desagrega_mult<-function(serieSint,serieDadosHist,k){
   lista<-list()
-  for (i in 1:k){
-    lista[[i]]=desagrega_np(serieSint,serieDadosHist)
+  if(k>0){
+    for (i in 1:k)
+      {
+        lista[[i]]=desagrega_np(serieSint,serieDadosHist)
+      }
   }
   return(lista)
 }
@@ -171,11 +175,11 @@ Relatorio = relatorio_estatistico(tabela_refinada)
 
 #Aplicação da terceira função(desagrega)
 
-Desagregado=desagrega_mult(serie_sintetica,tabela_refinada,1)
+Desagregado=desagrega_mult(serie_sintetica,tabela_refinada,10)
 
 #Aplicações diversas que gram gráficos, posteriormente provavelmente serão colocadas em outras funções
 ###########################################
-#Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano,12),deltat = 1/12,class="ts") 
+#Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano_hist,12),deltat = 1/12,class="ts") 
 
 #CorrelacaoSazonal= peacf(Time_serie,5)
 #CorrelacaoSazonal
