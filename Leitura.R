@@ -21,36 +21,41 @@
 library(moments)
 library(corrgram)
 library(pear)
-require(tcltk)
+require(tcltk)#Pacote incluido para rodar em windows e linux (função tk_choose.files())
+
+
 #LEITURA DE ARQUIVOS DE ENTRADA E VARIÁVEIS ÚTEIS#
 
 entrada = data.frame(read.csv(tk_choose.files(), sep=";", dec=",")) #Leitura de dados históricos mensais
-serie_sintetica = data.frame(read.csv(tk_choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma bacia
+serie_sintetica = data.frame(read.csv(tk_choose.files(), header = F,sep=";", dec=",")) #Leitura de série sintética gerada para essa mesma série
 qtd_ano_hist = length(entrada[,1])/12 #Quantidade de anos nos dados históricos baseado no arquivo de entrada
 qtd_ano_des = length(serie_sintetica[,1])
 
-
+if(qtd_ano_des<qtd_ano_hist){
+  print("Aviso: A série histórica é maior que a sintética!")
+}
 
 ##################FUNÇÕES####################
 
-#Esta função pega os dados brutos e retorna uma tabela ano x mes, além disso plota 2 gráficos necessários na análise
-div_anos<-function(sH)
+#Esta função pega os dados brutos e retorna uma tabela ano x mes, 
+#além disso plota 2 gráficos necessários na análise
+div_mensais<-function(sH)
 {
-  qtd_ano_hist = length(sH[,1])/12 #Calcula, baseado no número de linhas a quantidade de anos registrados no arquivo
+  qtd_ano_hist = length(sH[,1])/12                        #Calcula, baseado no número de linhas a quantidade de anos registrados no arquivo
   serie_hist = matrix(sH$VAZAO, qtd_ano_hist,byrow = TRUE)#Quebra o dataframe em 38 partes(anos) e cada parte é convertida numa linha da nova tabela
   
   anos = as.character(sH$MES)
   anos = substr(anos, nchar(anos)-4+1, nchar(anos))
   anos = unique(anos)
-  anos = sort(anos)#Pega a coluna de datas e interpreta quais os anos foram analisados baseados nos ultimos 4 caracteres da informação da coluna "MES"
+  anos = sort(anos)                                       #Pega a coluna de datas e interpreta quais os anos foram analisados baseados nos ultimos 4 caracteres da informação da coluna "MES"
   
   row.names(serie_hist)= anos
   colnames(serie_hist)=c("JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ")
-  serie_hist=as.data.frame(serie_hist)#Nomeia linhas e colunas e converte a matriz em um dataframe
+  serie_hist=as.data.frame(serie_hist)                    #Nomeia linhas e colunas e converte a matriz em um dataframe
+  ### !!! ainda tem que melhorar os gráficos, título, etc
+  boxplot(serie_hist,ylab = "Vazões Médias Mensais (m³/s)")
   
-  boxplot(serie_hist)
-  
-  plot(anos,apply(serie_hist,1,sum),type="b")
+  plot(anos,apply(serie_hist,1,sum),type="b",main="Vazões Anuais (nome da estação)",xlab = "Ano", ylab="Vazão (m³/s)")
 
   return(serie_hist)
 }
@@ -62,12 +67,13 @@ relatorio_estatistico<-function(tabela_anual)
   Desvio_Padrao = apply(tabela_anual,2,sd)
   Assimetria = skewness(tabela_anual)
   Indice_Kurt = kurtosis(tabela_anual)
-  
-  Relatorio = data.frame(Medias,Desvio_Padrao,Assimetria,Indice_Kurt) 
+  Coef_Var = (Desvio_Padrao/Medias)
+  Relatorio = data.frame(Medias,Desvio_Padrao,Assimetria,Indice_Kurt,Coef_Var) 
   return(Relatorio)  
 }
 
 #############Desagrega de forma não paramétrica os dados sintéticos utilizando estatísticas e dados históricos
+###Método proposto por LEE, T., SALAS, J.D., PRAIRIE, J. (2010) DOI: 10.1029/2009WR007761
 
 desagrega_np<-function(serieSint,serieDadosHist)
 {
@@ -76,7 +82,8 @@ desagrega_np<-function(serieSint,serieDadosHist)
   ##################PRIMEIRA ITERAÇÃO DE DESAGREGAÇÃO##########################
   
   Anuais = data.frame(V1=apply(serieDadosHist,1,sum))#Dados as vazões mensais, calcula as vazões anuais
-  delta_i = abs(rep(serieSint$V1[1],length(Anuais))-Anuais)#Faz um vetor da diferença(delta_i) do primeiro dado sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
+  primeiro_ano = rep(serieSint[1,1],length(Anuais))
+  delta_i = abs(primeiro_ano-Anuais)#Faz um vetor da diferença(delta_i) do primeiro ano sintético referente a vazão anual com todos os anos históricos( |X1-xi| )
   
   x=delta_i$V1
   Tabela = cbind(Anuais,delta_i$V1)#Faz uma tabela que relaciona ano, vazão anual histórica e diferença(delta_i)
@@ -101,7 +108,7 @@ desagrega_np<-function(serieSint,serieDadosHist)
   
   random = runif(1) #Escolhe número aleatório no vetor de pesos cumulativos(cwm) e armazena na variavel 'random'
   posicao = which.min(abs(cwm - random)) #Armazena na variavel 'posicao' a posição do número escolhido no vetor cwm
-  candidato = rownames(Tabela)[posicao] #Armazena o ano candidato a desagrgação na variavel 'candidato'
+  candidato = rownames(Tabela)[posicao] #Armazena o ano candidato a desagregação na variavel 'candidato'
  
   
   desagregado = serieDadosHist[candidato,]*(serieSint$V1[1]/(apply(serieDadosHist[candidato,],1,sum)))
@@ -112,7 +119,7 @@ desagrega_np<-function(serieSint,serieDadosHist)
   ############FIM DA DESAGREGAÇÃO DO ANO 1##############
   Tabela = Tabela[order(row.names(Tabela)),]
   ############DESAGREGAÇÃO DOS OUTROS ANOS###########################
-  for (j in 2:qtd_ano_des)
+  for (j in 2:(nrow(serieSint)))
   {
     ########### CÁLCULO DO DELTA_i###########
     
@@ -143,20 +150,49 @@ desagrega_np<-function(serieSint,serieDadosHist)
   return(desagregado_final)
 }
 
-############Desagrega multiplas vezes (k vezes)################
+############Desagrega multiplas vezes (n vezes)################
 
-desagrega_mult<-function(serieSint,serieDadosHist,k){
+desagrega_mult<-function(serieSint,serieDadosHist,n){
+  if(qtd_ano_des<(n*qtd_ano_hist)){
+    print("Quantidade de séries inválida")
+    break
+  }
+  
+  aux = tail(serieSint,qtd_ano_hist*n)
+  sintetica_quebrada = split(aux,rep(1:n,each=qtd_ano_hist))
+  sintetica_quebrada = lapply(sintetica_quebrada, "rownames<-",NULL)
+  
   lista<-list()
-  if(k>0){
-    for (i in 1:k)
+  if(n>0){
+    for (i in 1:n)
       {
-        lista[[i]]=desagrega_np(serieSint,serieDadosHist)
+        lista[[i]] = desagrega_np(as.data.frame(sintetica_quebrada[i]),serieDadosHist)
       }
   }
   return(lista)
 }
 
+#########################Relatório estatístico das séries desagregadas##############################
 
+relatorio_desag<-function(elemento){
+  check = class(elemento)
+  lista=list()
+  if(check == "list"){
+    tam = length(elemento)
+    for(i in 1:tam){
+      lista[[i]] = (apply(as.data.frame(elemento[i]),2,mean)-apply(tabela_refinada,2,mean))/apply(tabela_refinada,2,mean)
+      lista[i] = as.data.frame(lista[i])
+      aux = as.data.frame(lista[i])
+    }
+    return(lista)
+  }
+  else
+  {
+    
+  }
+}
+
+#######################################################
 
 
 
@@ -167,28 +203,33 @@ desagrega_mult<-function(serieSint,serieDadosHist,k){
 
 #######################APLICAÇÕES###########################
 
-#Aplicação da primeira função(div_anos)
-tabela_refinada = div_anos(entrada) #Função "quebra" o vetor de entrada de todos os meses em um dataframe cujas colunas se referem aos meses e as linhas aos anos
+#Aplicação da primeira função(div_mensais)
+tabela_refinada = div_mensais(entrada) #Função "quebra" o vetor de entrada de todos os meses em um dataframe cujas colunas se referem aos meses e as linhas aos anos
 
 #Aplicação da segunda função(relatorio_estatistico)
 Relatorio = relatorio_estatistico(tabela_refinada)
 
-#Aplicação da terceira função(desagrega)
+#Aplicação da terceira e quarta função(desagrega_np/desagrega_mult)
 
-Desagregado=desagrega_mult(serie_sintetica,tabela_refinada,10)
+Desagregado1 = desagrega_mult(serie_sintetica,tabela_refinada,10)
+#Desagregado2 = desagrega_np(serie_sintetica,tabela_refinada)
+
+#Aplicação da quinta função(relatorio_desag)
+
+Erro = relatorio_desag(Desagregado1)
 
 #Aplicações diversas que gram gráficos, posteriormente provavelmente serão colocadas em outras funções
 ###########################################
-#Time_serie= ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano_hist,12),deltat = 1/12,class="ts") 
+#Time_serie = ts(entrada$VAZAO,start=c(1,1) ,end=c(qtd_ano_hist,12),deltat = 1/12,class="ts") 
 
-#CorrelacaoSazonal= peacf(Time_serie,5)
+#CorrelacaoSazonal = peacf(Time_serie,5)
 #CorrelacaoSazonal
-#CorrelacaoSazonalParcial= pepacf(Time_serie,5)
+#CorrelacaoSazonalParcial = pepacf(Time_serie,5)
 #CorrelacaoSazonalParcial
 
 #ACF_N = acf(Time_serie)
 #ACF_N
-#ACF_Parcial=pacf(Time_serie)
+#ACF_Parcial = pacf(Time_serie)
 #ACF_Parcial
  
 #plot(entrada, type="b")
